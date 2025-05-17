@@ -3,57 +3,276 @@
 <head>
   <title>Head Dashboard</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.2.0/ethers.umd.min.js"></script>
+  <style>
+    .wallet-card {
+      background-color: #f8f9fa;
+      border: 1px solid #dee2e6;
+      border-radius: 0.5rem;
+      padding: 1rem;
+      box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,0.075);
+    }
+
+    .wallet-btn {
+      min-width: 160px;
+    }
+
+    .wallet-address {
+      font-size: 0.9rem;
+      background-color: #e9ecef;
+      padding: 0.4rem 0.7rem;
+      border-radius: 0.375rem;
+    }
+  </style>
 </head>
 <body class="bg-light">
   <div class="container mt-5">
     <h1 class="mb-4 text-primary">🚀 Head / Superior Dashboard</h1>
 
-    <!-- Announce New Fund -->
-    <div class="card mb-4">
-      <div class="card-header">Announce New Fund</div>
-      <div class="card-body">
-        <form method="POST" action="/head/announce">
-          <input type="text" class="form-control mb-2" name="department" placeholder="Department Name" required>
-          <input type="number" class="form-control mb-2" name="amount" placeholder="Fund Amount" required>
-          <textarea class="form-control mb-2" name="purpose" placeholder="Purpose of Fund"></textarea>
-          <button type="submit" class="btn btn-success">Announce Fund</button>
-        </form>
+    <!-- Wallet Connect Card -->
+    <div class="wallet-card mb-4 d-flex justify-content-between align-items-center">
+      <div>
+        <strong>Ethereum Wallet:</strong>
+        <span id="walletAddress" class="wallet-address text-dark ms-2">Not Connected</span>
       </div>
+      <button id="connectWalletBtn" class="btn btn-outline-primary wallet-btn">🔗 Connect Wallet</button>
+    </div>
+
+    <!-- Announce New Fund -->
+    <div class="card mb-4 shadow-sm">
+      <div class="card-header bg-success text-white">Announce New Fund</div>
+      <div class="card-body">
+        <form id="announceForm">
+          <input type="text" class="form-control mb-3" name="department" placeholder="Department Name" required>
+          <input type="number" class="form-control mb-3" name="amount" placeholder="Fund Amount" required>
+          <textarea class="form-control mb-3" name="purpose" placeholder="Purpose of Fund"></textarea>
+          <button type="submit" class="btn btn-success">Announce Fund</button>
+        </form>        
+      </div>
+    </div>
+    <!-- Blockchain Fund Announcements -->
+    <div class="card shadow-sm mt-4">
+      <div class="card-header bg-dark text-white">📢 Blockchain Fund Announcements</div>
+      <ul id="announcementList" class="list-group list-group-flush"></ul>
     </div>
 
     <!-- Pending Fund Requests -->
-    <div class="card mb-4">
-      <div class="card-header">Pending Fund Requests</div>
-      <ul class="list-group list-group-flush">
-        <!-- Example of looping through pending requests -->
-        <% if (pendingRequests && pendingRequests.length > 0) { %>
-          <% pendingRequests.forEach(request => { %>
-            <li class="list-group-item d-flex justify-content-between align-items-center">
-              Dept: <%= request.department %> | ₹<%= request.amount %> | Reason: <%= request.reason %>
-              <div>
-                <form action="/head/approve/<%= request._id %>" method="POST" class="d-inline">
-                  <button class="btn btn-success btn-sm me-2">Approve</button>
-                </form>
-                <form action="/head/reject/<%= request._id %>" method="POST" class="d-inline">
-                  <button class="btn btn-danger btn-sm">Reject</button>
-                </form>
-              </div>
-            </li>
-          <% }) %>
-        <% } else { %>
-          <li class="list-group-item">No pending requests</li>
-        <% } %>
+    <div class="card mb-4 shadow-sm">
+      <div class="card-header bg-warning text-dark">Pending Fund Requests</div>
+      <ul id="requestsList" class="list-group list-group-flush">
+        <li class="list-group-item text-muted">Loading requests...</li>
       </ul>
+      
+      
     </div>
 
     <!-- Analytics Overview -->
-    <div class="card">
-      <div class="card-header">Analytics Overview</div>
+    <div class="card shadow-sm">
+      <div class="card-header bg-info text-white">Analytics Overview</div>
       <div class="card-body">
-        <p>Funds Released: ₹<%= analytics.released %></p>
-        <p>Flagged Departments: <%= analytics.flagged %></p>
+        <p><strong>Funds Released:</strong> ₹<%= analytics.released %></p>
+        <p><strong>Flagged Departments:</strong> <%= analytics.flagged %></p>
       </div>
     </div>
   </div>
+  
+  <!-- Place your custom script after the ethers script -->
+  <script src="/js/contractConfig.js"></script>
+  
+  <script>
+    // Define the contract ABI and address (replace with your actual ABI and address)
+    
+
+    let provider, signer, fundContract, zonalContract;
+
+async function initializeContract() {
+  console.log('Initializing contract...');
+  if (window.ethereum) {
+    provider = new ethers.providers.Web3Provider(window.ethereum);
+    signer = provider.getSigner();
+    fundContract = new ethers.Contract(fundAnnouncementsAddress, fundAnnouncementsABI, signer);
+      zonalContract = new ethers.Contract(zonalFundRequestsAddress, zonalFundRequestsABI, signer);
+
+      console.log('Contracts initialized:', {
+  fundContract,
+  zonalContract
+});
+    
+
+  }
+  else{
+    alert('MetaMask is not detected.');
+  }
+}
+
+// Connect Wallet function
+async function connectWallet() {
+  console.log('Connecting wallet...');
+  if (window.ethereum) {
+    try {
+      const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+      const account = accounts[0];
+      document.getElementById('walletAddress').textContent = `${account.slice(0, 6)}...${account.slice(-4)}`;
+      
+      // Initialize contract after wallet is connected
+      await initializeContract();
+      
+      // ✅ Now fetch announcements only after everything is set up
+      await getAnnouncements();
+      await loadAllRequests();
+      // ✅ Unhide the announcements section
+      //document.getElementById('fundAnnouncementsCard').classList.remove('d-none');
+    } catch (err) {
+      console.error('Wallet connection rejected:', err);
+    }
+  } else {
+    alert('MetaMask is not detected. Please install MetaMask extension.');
+  }
+}
+
+
+// Announce Fund function
+async function announceFund(event) {
+  event.preventDefault();  // Prevent form from reloading the page
+  if (!fundContract) {
+    alert('Please connect your wallet first!');
+    return;
+  }
+
+  // Get form values
+  const department = event.target.department.value;
+  const amount = ethers.utils.parseEther(event.target.amount.value);
+  const purpose = event.target.purpose.value;
+
+  // Call smart contract to announce fund
+  try {
+    const tx = await fundContract.announceFund(department, amount, purpose);
+    await tx.wait();  // Wait for transaction to be mined
+    alert('Fund Announced Successfully!');
+    event.target.reset();  // Clear the form
+  } catch (error) {
+    console.error('Error in announcing fund:', error);
+    alert('Error in announcing fund!');
+  }
+}
+
+// Fetch Announcements function
+async function getAnnouncements() {
+  if (!fundContract) {
+    console.log('Contract not initialized yet!');
+    return;
+  }
+
+  try {
+    console.log("Fetching announcements...");
+    const announcements = await fundContract.getAnnouncements();
+    console.log("Fetched Announcements:", announcements);
+    displayAnnouncements(announcements);
+  } catch (error) {
+    console.error("Error fetching announcements:", error);
+  }
+}
+
+function displayAnnouncements(announcements) {
+  console.log("Displaying announcements:", announcements);
+  const announcementList = document.getElementById('announcementList');
+  announcementList.innerHTML = ''; // Clear previous list
+
+  announcements.forEach((announcement) => {
+    const listItem = document.createElement('li');
+    listItem.classList.add('list-group-item');
+    
+    listItem.innerHTML = `
+      <strong>Department:</strong> ${announcement.department} |
+      <strong>Amount:</strong> ₹${ethers.utils.formatEther(announcement.amount)} |
+      <strong>Purpose:</strong> ${announcement.purpose} |
+      <strong>Announced By:</strong> ${announcement.announcedBy} |
+      <strong>Timestamp:</strong> ${new Date(announcement.timestamp * 1000).toLocaleString()}
+    `;
+    
+    announcementList.appendChild(listItem);
+  });
+}
+
+// Event Listeners
+document.getElementById('connectWalletBtn').addEventListener('click', connectWallet);
+document.getElementById('announceForm').addEventListener('submit', announceFund);
+
+// Call getAnnouncements() only after the contract is initialized
+
+const announcementsCard = document.getElementById('fundAnnouncementsCard');
+if (announcementsCard) {
+  announcementsCard.classList.remove('d-none');
+}
+async function loadAllRequests() {
+    try {
+      const provider = new ethers.providers.Web3Provider(window.ethereum);
+      const signer = provider.getSigner();
+      const contract = new ethers.Contract(zonalFundRequestsAddress, zonalFundRequestsABI, signer);
+
+      const requests = await contract.getAllRequests();
+      const listDiv = document.getElementById("requestsList");
+      listDiv.innerHTML = ""; // Clear previous
+
+      if (requests.length === 0) {
+        listDiv.innerHTML = `<li class="list-group-item text-muted">No fund requests yet.</li>`;
+        return;
+      }
+
+      requests.forEach(req => {
+        const date = new Date(req.timestamp * 1000).toLocaleString();
+        const amount = ethers.utils.formatEther(req.budget);
+
+        const listItem = document.createElement("li");
+        listItem.className = "list-group-item";
+
+        listItem.innerHTML = `
+          <div class="mb-2">
+            <!--<strong>Reason:</strong> ${req.reason}<br>--!>
+            <strong>Amount:</strong> ₹${amount}<br>
+            
+            <strong>Requested By:</strong> ${req.requester}<br>
+            <small><strong>Timestamp:</strong> ${date}</small>
+          </div>
+          <div>
+            <button class="btn btn-success btn-sm me-2" onclick="approveRequest('${req.id}')">Approve</button>
+            <button class="btn btn-danger btn-sm" onclick="rejectRequest('${req.id}')">Reject</button>
+          </div>
+        `;
+
+        listDiv.appendChild(listItem);
+      });
+    } catch (error) {
+      console.error("Error loading requests:", error);
+      document.getElementById("requestsList").innerHTML =
+        `<li class="list-group-item text-danger">Failed to load requests.</li>`;
+    }
+  }
+
+  async function approveRequest(requestId) {
+    try {
+      const tx = await zonalContract.approveRequest(requestId);
+      await tx.wait();
+      alert("Request Approved");
+      loadAllRequests();
+    } catch (err) {
+      console.error("Approval error:", err);
+      alert("Failed to approve request.");
+    }
+  }
+
+  async function rejectRequest(requestId) {
+    try {
+      const tx = await zonalContract.rejectRequest(requestId);
+      await tx.wait();
+      alert("Request Rejected");
+      loadAllRequests();
+    } catch (err) {
+      console.error("Rejection error:", err);
+      alert("Failed to reject request.");
+    }
+  }
+
+  </script>
 </body>
 </html>

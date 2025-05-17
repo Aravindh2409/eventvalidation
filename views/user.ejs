@@ -3,9 +3,14 @@
 <head>
   <title>User Portal</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.2.0/ethers.umd.min.js"></script>
 </head>
 <body class="bg-light">
   <div class="container mt-5">
+	<h1 class="mb-4 text-success">👥 User Verification Portal</h1>
+<button id="connectBtn" class="btn btn-primary mb-4">🔌 Connect Wallet</button>
+<p id="walletAddress" class="text-muted"></p>
+
     <h1 class="mb-4 text-success">👥 User Verification Portal</h1>
 
     <!-- Verify Events Section -->
@@ -64,6 +69,218 @@
         <% } %> -->
       </div>
     </div>
+	<div class="card mt-4 d-none" id="fundAnnouncementsCard">
+		<div class="card-header bg-success text-white">
+		  📢 Fund Announcements
+		</div>
+		<ul class="list-group list-group-flush" id="announcementList">
+		  <!-- Dynamic announcements will be injected here -->
+		</ul>
+	  </div>
   </div>
+  <script>
+	// 👉 Replace these with your actual contract details
+	const contractAddress = '0xd89896B1670ca5C21E0AB60c496B7F0628712577'; 
+    const contractABI = [
+	{
+		"inputs": [
+			{
+				"internalType": "string",
+				"name": "department",
+				"type": "string"
+			},
+			{
+				"internalType": "uint256",
+				"name": "amount",
+				"type": "uint256"
+			},
+			{
+				"internalType": "string",
+				"name": "purpose",
+				"type": "string"
+			}
+		],
+		"name": "announceFund",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": false,
+				"internalType": "string",
+				"name": "department",
+				"type": "string"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "amount",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"internalType": "string",
+				"name": "purpose",
+				"type": "string"
+			},
+			{
+				"indexed": false,
+				"internalType": "address",
+				"name": "announcedBy",
+				"type": "address"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "timestamp",
+				"type": "uint256"
+			}
+		],
+		"name": "FundAnnounced",
+		"type": "event"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"name": "announcements",
+		"outputs": [
+			{
+				"internalType": "string",
+				"name": "department",
+				"type": "string"
+			},
+			{
+				"internalType": "uint256",
+				"name": "amount",
+				"type": "uint256"
+			},
+			{
+				"internalType": "string",
+				"name": "purpose",
+				"type": "string"
+			},
+			{
+				"internalType": "address",
+				"name": "announcedBy",
+				"type": "address"
+			},
+			{
+				"internalType": "uint256",
+				"name": "timestamp",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "getAnnouncements",
+		"outputs": [
+			{
+				"components": [
+					{
+						"internalType": "string",
+						"name": "department",
+						"type": "string"
+					},
+					{
+						"internalType": "uint256",
+						"name": "amount",
+						"type": "uint256"
+					},
+					{
+						"internalType": "string",
+						"name": "purpose",
+						"type": "string"
+					},
+					{
+						"internalType": "address",
+						"name": "announcedBy",
+						"type": "address"
+					},
+					{
+						"internalType": "uint256",
+						"name": "timestamp",
+						"type": "uint256"
+					}
+				],
+				"internalType": "struct FundAnnouncements.FundAnnouncement[]",
+				"name": "",
+				"type": "tuple[]"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	}
+];
+  
+	async function connectWallet() {
+	  if (typeof window.ethereum !== 'undefined') {
+		try {
+		  const accounts = await ethereum.request({ method: 'eth_requestAccounts' });
+		  const userAddress = accounts[0];
+		  document.getElementById('walletAddress').innerText = `Connected: ${userAddress}`;
+		  document.getElementById('fundAnnouncementsCard').classList.remove('d-none');
+		  loadAnnouncements(); // ✅ call after successful wallet connect
+		} catch (err) {
+		  console.error("Wallet connection failed:", err);
+		}
+	  } else {
+		alert("MetaMask not found!");
+	  }
+	}
+  
+	async function loadAnnouncements() {
+	  if (typeof window.ethereum !== 'undefined') {
+		const provider = new ethers.providers.Web3Provider(window.ethereum);
+		const signer = provider.getSigner();
+		const contract = new ethers.Contract(contractAddress, contractABI, signer);
+  
+		try {
+		  const announcements = await contract.getAnnouncements();
+		  displayAnnouncements(announcements);
+		} catch (error) {
+		  console.error("Error fetching announcements:", error);
+		}
+	  }
+	}
+  
+	function displayAnnouncements(announcements) {
+	  const list = document.getElementById("announcementList");
+	  list.innerHTML = '';
+  
+	  announcements.forEach(a => {
+		const date = new Date(a.timestamp * 1000).toLocaleString();
+		const item = document.createElement('li');
+		item.className = 'list-group-item';
+		item.innerHTML = `
+		  <div>
+			<strong>🏢 ${a.department}</strong><br>
+			💸 <strong>Amount:</strong> ₹${ethers.utils.formatEther(a.amount)} <br>
+			📄 <strong>Purpose:</strong> ${a.purpose} <br>
+			🕒 <strong>Time:</strong> ${date} <br>
+			🔐 <strong>Announced By:</strong> <span style="font-size: 0.9em">${a.announcedBy}</span>
+		  </div>
+		`;
+		list.appendChild(item);
+	  });
+	}
+  
+	document.getElementById('connectBtn').addEventListener('click', connectWallet);
+  </script>
+  
+  
+  
+  
+  
 </body>
 </html>

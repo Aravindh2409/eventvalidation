@@ -4,6 +4,8 @@ const mongoose = require('mongoose');
 const bodyParser = require('body-parser');
 const path = require('path');
 const session = require('express-session');
+app.use(express.static('public'));
+
 app.use(session({
   secret: 'someSecretKey123',
   resave: false,
@@ -14,6 +16,9 @@ app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 const authRoutes = require('./routes/auth');
 app.use('/', authRoutes);
+const zonalRoutes = require('./routes/zonal');
+app.use('/zonal', zonalRoutes);  // This handles /zonal/request
+
 mongoose.connect('mongodb://localhost:27017/orgblock', {
   useNewUrlParser: true,
   useUnifiedTopology: true,
